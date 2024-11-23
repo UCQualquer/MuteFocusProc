@@ -33,13 +33,13 @@ HRESULT GetFocusedProcessId(DWORD* dpProcId)
 
 	wFocusedWind = GetForegroundWindow();
 	if (wFocusedWind == NULL) {
-		LOG_ERR("GetForegroundWindow fail");
+		LOG_ERR("GetForegroundWindow fail\n");
 		return E_FAIL;
 	}
 
 	GetWindowThreadProcessId(wFocusedWind, dpProcId);
 	if (dpProcId == NULL) {
-		LOG_ERR("GetWindowThreadProcessId fail");
+		LOG_ERR("GetWindowThreadProcessId fail\n");
 		return E_FAIL;
 	}
 	
@@ -55,16 +55,14 @@ DWORD GetParentProcessId(DWORD dProcId)
 	if (Process32First(h, &pe)) {
 		do {
 			if (pe.th32ProcessID == dProcId) {
-				LOG("Parent: %d\n", pe.th32ParentProcessID);
-			}
-			else if (pe.th32ParentProcessID == dProcId) {
-				LOG("Child: %d\n", pe.th32ProcessID);
+				CloseHandle(h);
+				return pe.th32ParentProcessID;
 			}
 		} while (Process32Next(h, &pe));
 	}
 
 	CloseHandle(h);
-	return dProcId;
+	return 0;
 }
 
 BOOL IsProcessRelated(DWORD dProcId, DWORD dProcId1)
@@ -104,14 +102,13 @@ HRESULT MuteFocusedProcess()
 
 	DWORD dFocusedProcessId;
 
+	// Do something
 	hr = CoInitialize(NULL);
 	EXIT_ON_ERROR(hr, __LINE__);
 
 	// Get focused process id
 	hr = GetFocusedProcessId(&dFocusedProcessId);
 	EXIT_ON_ERROR(hr, __LINE__);
-
-	dFocusedProcessId = GetParentProcessId(dFocusedProcessId);
 
 	// Get audio device enumerator
 	hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), NULL,
@@ -120,10 +117,11 @@ HRESULT MuteFocusedProcess()
 	EXIT_ON_ERROR(hr, __LINE__);
 
 	// Get audio device collection
-	UINT count;
 	hr = pEnumerator->EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, &pCollection);
+	SAFE_RELEASE(pEnumerator);
 	EXIT_ON_ERROR(hr, __LINE__);
 	
+	UINT count;
 	hr = pCollection->GetCount(&count);
 	EXIT_ON_ERROR(hr, __LINE__);
 
@@ -161,7 +159,7 @@ HRESULT MuteFocusedProcess()
 			hr = pSessionControl2->GetProcessId(&dProcId);
 			if (FAILED(hr)) continue;
 
-			LOG("PID: %d\n", dProcId);
+			LOG("Session PID: %d\n", dProcId);
 
 			if (dProcId != dFocusedProcessId && !IsProcessRelated(dProcId, dFocusedProcessId))
 				continue;
@@ -175,7 +173,8 @@ HRESULT MuteFocusedProcess()
 			EXIT_ON_ERROR(hr, __LINE__);
 
 			LOG("Ok\n");
-			return S_OK;
+			hr = S_OK;
+			goto Exit;
 		}
 	}
 
@@ -183,7 +182,6 @@ HRESULT MuteFocusedProcess()
 	LOG_ERR("Not found\n");
 
 Exit:
-	SAFE_RELEASE(pEnumerator);
 	SAFE_RELEASE(pAudioSessionManager);
 	SAFE_RELEASE(pSessionEnumerator);
 	SAFE_RELEASE(pCollection);
