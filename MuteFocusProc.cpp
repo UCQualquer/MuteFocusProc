@@ -434,12 +434,15 @@ Exit:
 	SAFE_RELEASE(pEnumerator);
 	SAFE_RELEASE(pCollection);
 
-	for (int i = 0; i < deviceCount; i++)
+	if (hrResults != NULL)
 	{
-		if (hrResults[i] == S_OK)
+		for (int i = 0; i < deviceCount; i++)
 		{
-			hr = S_OK;
-			break;
+			if (hrResults[i] == S_OK)
+			{
+				hr = S_OK;
+				break;
+			}
 		}
 	}
 
