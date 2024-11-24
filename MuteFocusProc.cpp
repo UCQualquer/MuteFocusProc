@@ -47,45 +47,6 @@ HRESULT GetFocusedProcessId(DWORD* dpProcId)
 	return S_OK;
 }
 
-DWORD GetParentProcessId(DWORD dProcId)
-{
-	HANDLE h = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-	PROCESSENTRY32 pe = { 0 };
-	pe.dwSize = sizeof(PROCESSENTRY32);
-
-	if (Process32First(h, &pe)) {
-		do {
-			if (pe.th32ProcessID == dProcId) {
-				CloseHandle(h);
-				return pe.th32ParentProcessID;
-			}
-		} while (Process32Next(h, &pe));
-	}
-
-	CloseHandle(h);
-	return 0;
-}
-
-BOOL IsProcessRelated(DWORD dProcId, DWORD dProcId1)
-{
-	HANDLE h = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-	PROCESSENTRY32 pe = { 0 };
-	pe.dwSize = sizeof(PROCESSENTRY32);
-
-	if (Process32First(h, &pe)) {
-		do {
-			if (pe.th32ParentProcessID == dProcId && pe.th32ProcessID == dProcId1
-				|| pe.th32ParentProcessID == dProcId1 && pe.th32ProcessID == dProcId) {
-				CloseHandle(h);
-				return TRUE;
-			}
-		} while (Process32Next(h, &pe));
-	}
-
-	CloseHandle(h);
-	return FALSE;
-}
-
 void LogDeviceEndpoint(IMMDevice* pEndpoint)
 {
 	HRESULT hr;
@@ -108,10 +69,11 @@ void LogDeviceEndpoint(IMMDevice* pEndpoint)
 		hr = pProps->GetValue(PKEY_Device_FriendlyName, &varName);
 		if (SUCCEEDED(hr) && varName.vt != VT_EMPTY)
 			LOG("Friendly Name: '%S'\n", varName.pwszVal);
+		
+		PropVariantClear(&varName);
 	}
 
 	CoTaskMemFree(pwszId);
-	PropVariantClear(&varName);
 	SAFE_RELEASE(pProps);
 }
 
@@ -151,9 +113,10 @@ HRESULT GetProcessName(DWORD dProcId, LPWSTR lpProcName)
 		{
 			hr = S_OK;
 		}
+
+		CloseHandle(handle);
 	}
 
-	CloseHandle(handle);
 	return hr;
 }
 
@@ -389,7 +352,6 @@ Exit:
 HRESULT GlobalMuteProcess(DWORD dProcId)
 {
 	HRESULT hr;
-	HRESULT* hrResults = NULL;
 
 	IMMDeviceEnumerator* pEnumerator = NULL;
 	IMMDeviceCollection* pCollection = NULL;
@@ -409,8 +371,7 @@ HRESULT GlobalMuteProcess(DWORD dProcId)
 	hr = pCollection->GetCount(&deviceCount);
 	EXIT_ON_ERROR(hr, __LINE__);
 
-	hrResults = (HRESULT*)malloc(sizeof(HRESULT*) * deviceCount);
-
+	hr = S_FALSE;
 	for (int deviceIndex = 0; deviceIndex < deviceCount; deviceIndex++)
 	{
 		LOG("--------------\n");
@@ -422,30 +383,19 @@ HRESULT GlobalMuteProcess(DWORD dProcId)
 			continue;
 		}
 
-#ifdef _DEBUG
 		LogDeviceEndpoint(pEndpoint);
-#endif
 
-		hrResults[deviceIndex] = MuteProcessOnAudioEndpoint(dProcId, pEndpoint);
+		HRESULT hrMute = MuteProcessOnAudioEndpoint(dProcId, pEndpoint);
+		if (hrMute == S_OK)
+			hr = S_OK;
+
 		SAFE_RELEASE(pEndpoint);
 		LOG("--------------\n\n");
 	}
 Exit:
+
 	SAFE_RELEASE(pEnumerator);
 	SAFE_RELEASE(pCollection);
-
-	if (hrResults != NULL)
-	{
-		for (int i = 0; i < deviceCount; i++)
-		{
-			if (hrResults[i] == S_OK)
-			{
-				hr = S_OK;
-				break;
-			}
-		}
-	}
-
 	return hr;
 }
 
@@ -459,13 +409,14 @@ HRESULT MuteFocusedProcess()
 	EXIT_ON_ERROR(hr, __LINE__);
 
 	hr = GlobalMuteProcess(dFocusedProcessId);
-	if (hr == S_FALSE)
-	{
-		LOG_ERR("Could not mute the process\n");
-	}
-
 
 Exit:
+	if (hr == S_FALSE)
+		LOG_ERR("Could not mute the process\n");
+	else if (hr == S_OK)
+		LOG("Success\n");
+	else LOG_ERR("Error: %d\n", hr);
+
 	return hr;
 }
 
