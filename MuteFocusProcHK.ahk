@@ -2,5 +2,5 @@
 
 !NumpadSub::
 {
-	RunWait A_ScriptDir . "\x64\Debug\MuteFocusProc.exe",,"Hide"
+	RunWait A_ScriptDir . "\x64\Release\MuteFocusProc.exe",,"Hide"
 }
