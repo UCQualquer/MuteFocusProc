@@ -128,9 +128,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="MuteFocusProc.cpp" />
+    <ClCompile Include="ProcessFamily.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="MuteFocusProcHK.ahk" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ProcessFamily.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
